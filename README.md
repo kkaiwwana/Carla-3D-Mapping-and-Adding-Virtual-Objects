@@ -11,7 +11,7 @@ cd [YOUR-PATH-TO-CARLA]
 ### carla 3d-mapping
 ```bash
 cd carla_3d-mapping_and_adding_virtual_objects/src
-python carla_3d_mapping.py --map Town10HD
+python carla_3d_mapping.py --map Town10HD --save_data_path [YOUR-PATH-TO-SAVE-DATA]
 ```
 ### point cloud visualizing
 ```bash
