@@ -78,8 +78,8 @@ def main(*args, **kwargs):
         depth_camera, depth_image_queue = get_sensor(world, 'depth', vehicle)
         finally_tasks.put({'func': depth_camera.destroy, 'args': None, 'description': 'destroy depth camera'})
 
-        # 在 OpenCV 的显示窗口中显示图像
-        cv2.namedWindow('VehiclePerspective', cv2.WINDOW_AUTOSIZE)
+        # display RGB camera output by cv2 window
+        cv2.namedWindow('RGB Camera Output', cv2.WINDOW_AUTOSIZE)
         finally_tasks.put({'func': cv2.destroyAllWindows, 'args': None, 'description': 'destroy opencv windows'})
 
         # use open3D to visualize point cloud data
@@ -99,7 +99,7 @@ def main(*args, **kwargs):
             depth_image = depth_image_queue.get()
             rgb_image = rgb_image_queue.get()
             rgb_image = np.reshape(np.copy(rgb_image.raw_data), (rgb_image.height, rgb_image.width, 4))
-            cv2.imshow('VehiclePerspective', rgb_image)
+            cv2.imshow('RGB Camera Output', rgb_image)
 
             if arguments.top_view:
                 # add a spector to see how our vehicle move
