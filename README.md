@@ -1,4 +1,4 @@
-# Carla 3D-Mapping and Adding Virtual Objects in world
+# Carla 3D-Mapping and Adding Virtual Objects
 3D-Mapping in Carla by using Depth & RGB camera and adding virtual objects(project patch to carla world in this demo) to camera output
 ## Quick Start
 ### *clone this repo & run carla simu*
