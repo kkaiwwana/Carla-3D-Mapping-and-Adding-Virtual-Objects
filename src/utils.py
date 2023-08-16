@@ -5,9 +5,43 @@ from numpy.matlib import repmat
 import cv2
 import carla
 import math
+import queue
 
 
-def to_bgra_array(image):
+def set_sync_mode(world, fix_delta_sec=0.05):
+    settings = world.get_settings()
+    settings.synchronous_mode = True  # 启用同步模式
+    settings.fixed_delta_seconds = fix_delta_sec
+    world.apply_settings(settings)
+
+
+def get_sensor(world, sensor_type: str, attach_actor: carla.Actor, location=(0, 0, 2), rotation=(0, 0, 0)):
+    """
+    get sensor(depth camera or rgb camera).
+    args location(x, y, z) and rotation(yaw, pitch, roll) are relative to the actor it attached to.
+    """
+    x, y, z = location
+    yaw, pitch, roll = rotation
+
+    bp_lib = world.get_blueprint_library()
+    sensor_bp = bp_lib.find('sensor.camera.' + sensor_type)
+    sensor_bp.set_attribute('fov', '90')
+    init_trans = carla.Transform(carla.Location(x=x, y=y, z=z), carla.Rotation(yaw=yaw, pitch=pitch, roll=roll))
+    if sensor_type == 'depth':
+        sensor = world.spawn_actor(sensor_bp, init_trans, attach_to=attach_actor,
+                                   attachment_type=carla.AttachmentType.Rigid)
+    elif sensor_type == 'rgb':
+        sensor = world.spawn_actor(sensor_bp, init_trans, attach_to=attach_actor)
+    else:
+        assert False, 'only depth and rgb camera supported.'
+
+    sensor_data_queue = queue.Queue()
+    sensor.listen(sensor_data_queue.put)
+
+    return sensor, sensor_data_queue
+
+
+def _to_bgra_array(image):
     """Convert a CARLA raw image to a BGRA numpy array."""
     if not isinstance(image, carla.Image):
         raise ValueError("Argument must be a carla.sensor.Image")
@@ -17,12 +51,12 @@ def to_bgra_array(image):
     return array
 
 
-def depth_to_array(image):
+def _depth_to_array(image):
     """
     Convert an image containing CARLA encoded depth-map to a 2D array containing
     the depth value of each pixel normalized between [0.0, 1.0].
     """
-    array = to_bgra_array(image)
+    array = _to_bgra_array(image)
     array = array.astype(numpy.float32)
     # Apply (R + G * 256 + B * 256 * 256) / (256 * 256 * 256 - 1).
     normalized_depth = numpy.dot(array[:, :, :3], [65536.0, 256.0, 1.0])
@@ -39,7 +73,7 @@ def depth_to_local_point_cloud(image, color=None, max_depth=0.9):
     "max_depth" is used to omit the points that are far enough.
     """
     far = 1000.0  # max depth in meters.
-    normalized_depth = depth_to_array(image)
+    normalized_depth = _depth_to_array(image)
 
     # (Intrinsic) K Matrix
     k = numpy.identity(3)
@@ -117,25 +151,8 @@ def get_world2camera_matrix(carla_transform: carla.Transform, real_y_axis=False)
 
 class CarlaVirtualObject:
 
-    def __init__(self, data_filepath):
+    def __init__(self, object_path):
         pass
 
     def data2pcd(self, *args, **kwargs):
         pass
-
-
-class CarlaPatch2Prj(CarlaVirtualObject):
-    """
-    load patch to project in carla world, get point cloud in return value.
-    """
-    def __init__(self, data_filepath: torch.Tensor):
-        super().__init__(data_filepath)
-        patch_tensor = torch.load(data_filepath, map_location='cpu')
-        self.patch_data = patch_tensor.permute((1, 2, 0)).detach().numpy()
-
-    def data2pcd(self, depth_data: carla.Image, prj_depth_camera: carla.Sensor, real_y_axis):
-        patch_p3d, patch_color = depth_to_local_point_cloud(depth_data, self.patch_data, max_depth=0.9)
-        c2w_mat = get_camera2world_matrix(prj_depth_camera.get_transform(), real_y_axis=real_y_axis)
-        patch_p3d = (c2w_mat @ patch_p3d)[:3]
-
-        return patch_p3d, patch_color
