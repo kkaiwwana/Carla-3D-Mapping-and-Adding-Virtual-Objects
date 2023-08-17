@@ -1,6 +1,5 @@
 import open3d as o3d
 import argparse
-import cv2
 
 parser = argparse.ArgumentParser(prog='visualize point cloud')
 
@@ -18,17 +17,19 @@ def main(*args, **kwargs):
 
     vis = o3d.visualization.Visualizer()
     vis.create_window(
-        window_name="Display Point Cloud",
+        window_name=arguments.window_name,
         width=arguments.window_size[1],
         height=arguments.window_size[0],
         left=arguments.window_loc[0],
         top=arguments.window_loc[1]
     )
-    vis.get_render_option().background_color = [0.05, 0.05, 0.05]
-    vis.get_render_option().point_size = 1
+    # vis.get_render_option().background_color = [0.05, 0.05, 0.05]
+    vis.get_render_option().point_size = arguments.point_size
     vis.get_render_option().show_coordinate_frame = True
 
-    vis.add_geometry(point_clouds[0])
+    for i, point_cloud in enumerate(point_clouds):
+        vis.add_geometry(point_cloud) if i == 0 else vis.add_geometry(point_cloud)
+
     vis.poll_events()
     vis.update_renderer()
     vis.run()
