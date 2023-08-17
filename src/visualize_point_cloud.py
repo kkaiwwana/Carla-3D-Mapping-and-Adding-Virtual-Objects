@@ -23,7 +23,7 @@ def main(*args, **kwargs):
         left=arguments.window_loc[0],
         top=arguments.window_loc[1]
     )
-    # vis.get_render_option().background_color = [0.05, 0.05, 0.05]
+    vis.get_render_option().background_color = [0.05, 0.05, 0.05]
     vis.get_render_option().point_size = arguments.point_size
     vis.get_render_option().show_coordinate_frame = True
 
