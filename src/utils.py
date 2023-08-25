@@ -112,7 +112,7 @@ def depth_to_local_point_cloud(image, color=None, max_depth=0.9):
     return p3d, color
 
 
-def get_camera2world_matrix(carla_transform: carla.Transform, real_y_axis=False):
+def get_camera2world_matrix(carla_transform: carla.Transform):
     """
     Args:
         carla_transform: Carla.Transform instance, contains carla.Location and carla.Rotation
@@ -121,7 +121,7 @@ def get_camera2world_matrix(carla_transform: carla.Transform, real_y_axis=False)
     Returns:
         a 4x4 rotation & transaction matrix that transforms coords from camera coord-sys to simu-world coord-sys.
     """
-    camera2vehicle_matrix = np.array([[0, 0, 1, 0], [1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]], dtype=np.float64)
+    camera2vehicle_matrix = np.array([[0, 0, 1, 0], [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=np.float64)
 
     pitch = carla_transform.rotation.pitch / 180.0 * math.pi
     yaw = carla_transform.rotation.yaw / 180.0 * math.pi
@@ -138,15 +138,13 @@ def get_camera2world_matrix(carla_transform: carla.Transform, real_y_axis=False)
         [sin_p, -cos_p * sin_r, cos_p * cos_r, loc_z],
         [0.0, 0.0, 0.0, 1.0]
     ])
-    if real_y_axis:
-        vehicle2world_matrix[1] *= -1
 
     return vehicle2world_matrix @ camera2vehicle_matrix
 
 
-def get_world2camera_matrix(carla_transform: carla.Transform, real_y_axis=False):
+def get_world2camera_matrix(carla_transform: carla.Transform):
     # return inverse c2w matrix
-    return np.linalg.inv(get_camera2world_matrix(carla_transform, real_y_axis))
+    return np.linalg.inv(get_camera2world_matrix(carla_transform))
 
 
 class CarlaVirtualObject:

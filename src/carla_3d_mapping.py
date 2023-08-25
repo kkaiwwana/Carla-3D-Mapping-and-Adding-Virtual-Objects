@@ -17,7 +17,6 @@ import numpy as np
 import cv2
 import open3d as o3d
 import time
-from tqdm import tqdm
 
 from utils import depth_to_local_point_cloud, get_camera2world_matrix, set_sync_mode, get_sensor
 
@@ -33,7 +32,6 @@ parser.add_argument('--tm_port',              default=8000, type=int, help='Traf
 parser.add_argument('--top-view',             default=True, help='Setting spectator to top view on ego car')
 parser.add_argument('--map',                  default='Town10HD', help='Town Map')
 parser.add_argument('--save_data_path',       default='../PointCloud/', help='Path to save point cloud files')
-parser.add_argument('--real_y_axis',          default=False, help='Get real y axis value in point cloud')
 parser.add_argument('--sampling_per_N_frames',default=40, type=int, help='sampling once after N frames(default: 40)')
 parser.add_argument('--sync_mode',            default=True, help='enable sync mode')
 
@@ -113,7 +111,7 @@ def main(*args, **kwargs):
                 camera_transform = depth_camera.get_transform()
                 # get translation and rotation matrix
                 # WATCH OUT! Use carla.Transform().get_matrix() will cause mistakes.
-                camera2world_matrix = get_camera2world_matrix(camera_transform, real_y_axis=arguments.real_y_axis)
+                camera2world_matrix = get_camera2world_matrix(camera_transform)
 
                 # convert p2d to p3d(local) and convert color RGB <-> BGR
                 p3d, color = depth_to_local_point_cloud(depth_image, rgb_image[..., [2, 1, 0]], max_depth=0.6)

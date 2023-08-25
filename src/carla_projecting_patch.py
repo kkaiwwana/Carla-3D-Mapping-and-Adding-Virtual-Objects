@@ -19,7 +19,7 @@ import math
 
 from typing import *
 from utils import get_camera2world_matrix, get_world2camera_matrix, set_sync_mode, get_sensor
-from utils import CarlaVirtualObject, depth_to_local_point_cloud
+from utils import CarlaVirtualObject, depth_to_local_point_cloud, _depth_to_array
 
 # arguments
 import argparse
@@ -33,7 +33,6 @@ parser.add_argument('--tm_port',              default=8000, type=int, help='Traf
 parser.add_argument('--top-view',             default=True, help='Setting spectator to top view on ego car')
 parser.add_argument('--map',                  default='Town10HD', help='Town Map')
 parser.add_argument('--save_data_path',       default='../PointCloud/', help='Path to save point cloud files')
-parser.add_argument('--real_y_axis',          default=False, help='Get real y axis value in point cloud')
 parser.add_argument('--sync_mode',            default=True, help='enable sync mode')
 
 parser.add_argument('--spawn_point',          default=5, type=int, help='spawn point index.')
@@ -42,9 +41,9 @@ parser.add_argument('--relative_pos',         default=True,
                     help='when True, location settings of projector camera will be relative to ego vehicle')
 parser.add_argument('--x',                    default=0, type=float, help='x coordinates of projector camera')
 parser.add_argument('--y',                    default=0, type=float, help='y coordinates of projector camera')
-parser.add_argument('--z',                    default=40, type=float, help='z coordinates of projector camera')
-parser.add_argument('--yaw',                  default=0, type=float, help='yaw angle of projector camera')
-parser.add_argument('--pitch',                default=0, type=float, help='pitch angle of projector camera')
+parser.add_argument('--z',                    default=10, type=float, help='z coordinates of projector camera')
+parser.add_argument('--yaw',                  default=10, type=float, help='yaw angle of projector camera')
+parser.add_argument('--pitch',                default=5, type=float, help='pitch angle of projector camera')
 parser.add_argument('--roll',                 default=0, type=float, help='roll angle of projector camera')
 parser.add_argument('--fov',                  default=15, type=int, help='fov of projector camera')
 parser.add_argument('--patch_H',              default=560, type=int, help='height of patch object')
@@ -62,9 +61,9 @@ class CarlaPatch2Prj(CarlaVirtualObject):
         patch_array = np.load(data_filepath)
         self.patch_data = patch_array
 
-    def data2pcd(self, depth_data: carla.Image, prj_depth_camera: carla.Sensor, real_y_axis):
+    def data2pcd(self, depth_data: carla.Image, prj_depth_camera: carla.Sensor):
         patch_p3d, patch_color = depth_to_local_point_cloud(depth_data, self.patch_data, max_depth=0.9)
-        c2w_mat = get_camera2world_matrix(prj_depth_camera.get_transform(), real_y_axis=real_y_axis)
+        c2w_mat = get_camera2world_matrix(prj_depth_camera.get_transform())
         patch_p3d = (c2w_mat @ patch_p3d)[:3]
 
         return patch_p3d, patch_color
@@ -137,7 +136,7 @@ def main():
 
         rgb_camera, rgb_image_queue = get_sensor(world, 'rgb', vehicle, (0, 0, 2), (0, 0, 0))
         finally_tasks.put({'func': rgb_camera.destroy, 'args': None, 'description': 'destroy rgb camera'})
-        depth_camera, depth_image_queue = get_sensor(world, 'depth', vehicle)
+        depth_camera, depth_image_queue = get_sensor(world, 'depth', vehicle, (0, 0, 2), (0, 0, 0))
         finally_tasks.put({'func': depth_camera.destroy, 'args': None, 'description': 'destroy depth camera'})
 
         prj_depth_camera, prj_depth_image_queue = get_patch_projector(
@@ -149,7 +148,7 @@ def main():
 
         prj_depth_image = prj_depth_image_queue.get()
         carla_patch = CarlaPatch2Prj(arguments.object_path)
-        object_p3d, object_color = carla_patch.data2pcd(prj_depth_image, prj_depth_camera, arguments.real_y_axis)
+        object_p3d, object_color = carla_patch.data2pcd(prj_depth_image, prj_depth_camera)
         print('project patch to world...')
         prj_depth_camera.destroy()
         print('destroy projector')
@@ -159,7 +158,6 @@ def main():
         while cv2.waitKey(1) != ord('q'):
             world.tick()
 
-            # TODO use depth data to compute depth mask
             depth_image = depth_image_queue.get()
             carla_rgb_image = rgb_image_queue.get()
             rgb_image = np.reshape(np.copy(carla_rgb_image.raw_data), (carla_rgb_image.height, carla_rgb_image.width, 4))
@@ -178,23 +176,39 @@ def main():
 
             camera_transform = rgb_camera.get_transform()
 
-            world2camera_matrix = get_world2camera_matrix(camera_transform, real_y_axis=arguments.real_y_axis)
+            world2camera_matrix = get_world2camera_matrix(camera_transform)
 
             p2d = k @ (world2camera_matrix @ np.concatenate([object_p3d, np.ones((1, object_p3d.shape[1]))]))[:3]
             p2d[0] /= p2d[2]
             p2d[1] /= p2d[2]
             # convert to int64 as index
             p2d = numpy.array(p2d + 0.5, dtype=np.int64)
-            mask = (p2d[0] >= 0) & (p2d[1] >= 0) & (p2d[0] < carla_rgb_image.width) & (p2d[1] < carla_rgb_image.height)
-            p2d = mask * p2d + ~mask * np.zeros_like(p2d[0])
+            # box mask
+            box_mask = (p2d[0] >= 0) & (p2d[1] >= 0) & \
+                       (p2d[0] < carla_rgb_image.width) & \
+                       (p2d[1] < carla_rgb_image.height)
+
+            p2d = box_mask * p2d + ~box_mask * np.zeros_like(p2d[0])
+
+            # depth mask
+            # didn't work. todo: fix it
+            # far = 1000.0
+            # foreground_depth = _depth_to_array(depth_image) * far  # [H, W]
+            # rgb_camera_loc = rgb_camera.get_transform().location
+            # p3d_depth = (object_p3d - np.array([[rgb_camera_loc.x], [rgb_camera_loc.y], [rgb_camera_loc.z]])) ** 2
+            # p3d_depth = np.sqrt(np.sum(p3d_depth, axis=0))  # (3, N) -> (1, N)
+            #
+            # depth_mask = (foreground_depth[-p2d[1], -p2d[0]] - p3d_depth) < 0
+            # p2d = depth_mask * p2d + ~depth_mask * np.zeros_like(p2d[0])
 
             c_point = object_p3d[:, object_p3d.shape[1] // 2]
             ray = carla.Location(c_point[0], - c_point[1], c_point[2]) - rgb_camera.get_transform().location
             forward_vec = rgb_camera.get_transform().get_forward_vector()
             # to make sure patch is in the front of vehicle and display it.
+
             if forward_vec.dot(ray) > 0:
                 # replace pixels in camera output with patch pixels
-                rgb_image[p2d[1], -p2d[0], :3] = np.array(object_color * 255, dtype=np.uint8)
+                rgb_image[-p2d[1], -p2d[0], :3] = np.array(object_color * 255, dtype=np.uint8)
             cv2.imshow('RGB Camera Output', rgb_image)
 
     finally:
