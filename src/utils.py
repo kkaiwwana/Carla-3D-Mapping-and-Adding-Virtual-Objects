@@ -112,16 +112,21 @@ def depth_to_local_point_cloud(image, color=None, max_depth=0.9):
     return p3d, color
 
 
-def get_camera2world_matrix(carla_transform: carla.Transform):
+def get_sensor2world_matrix(carla_transform: carla.Transform, is_vehicle_space=True):
     """
     Args:
         carla_transform: Carla.Transform instance, contains carla.Location and carla.Rotation
-        real_y_axis: return real y-axis value when setting true. but the view of point cloud in open-3d
-            will be reversed in yaw direction.
+        is_vehicle_space: if the sensor works in vehicle coordinate space (e.g. LiDAR) which follows UE coordinate sys,
+            the transformation from screen space to vehicle space is not needed. Otherwise, swap axes.
+            see more details in https://github.com/carla-simulator/carla/issues/553.
+
     Returns:
         a 4x4 rotation & transaction matrix that transforms coords from camera coord-sys to simu-world coord-sys.
     """
-    camera2vehicle_matrix = np.array([[0, 0, 1, 0], [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=np.float64)
+    if is_vehicle_space:
+        sensor2vehicle_matrix = np.array([[0, 0, 1, 0], [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=np.float64)
+    else:
+        sensor2vehicle_matrix = np.eye(4)
 
     pitch = carla_transform.rotation.pitch / 180.0 * math.pi
     yaw = carla_transform.rotation.yaw / 180.0 * math.pi
@@ -139,12 +144,12 @@ def get_camera2world_matrix(carla_transform: carla.Transform):
         [0.0, 0.0, 0.0, 1.0]
     ])
 
-    return vehicle2world_matrix @ camera2vehicle_matrix
+    return vehicle2world_matrix @ sensor2vehicle_matrix
 
 
-def get_world2camera_matrix(carla_transform: carla.Transform):
+def get_world2sensor_matrix(carla_transform: carla.Transform):
     # return inverse c2w matrix
-    return np.linalg.inv(get_camera2world_matrix(carla_transform))
+    return np.linalg.inv(get_sensor2world_matrix(carla_transform))
 
 
 class CarlaVirtualObject:

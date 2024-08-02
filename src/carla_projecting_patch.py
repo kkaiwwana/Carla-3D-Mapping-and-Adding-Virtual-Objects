@@ -18,7 +18,7 @@ import cv2
 import math
 
 from typing import *
-from utils import get_camera2world_matrix, get_world2camera_matrix, set_sync_mode, get_sensor
+from utils import get_sensor2world_matrix, get_world2sensor_matrix, set_sync_mode, get_sensor
 from utils import CarlaVirtualObject, depth_to_local_point_cloud, _depth_to_array
 
 # arguments
@@ -63,7 +63,7 @@ class CarlaPatch2Prj(CarlaVirtualObject):
 
     def data2pcd(self, depth_data: carla.Image, prj_depth_camera: carla.Sensor):
         patch_p3d, patch_color = depth_to_local_point_cloud(depth_data, self.patch_data, max_depth=0.9)
-        c2w_mat = get_camera2world_matrix(prj_depth_camera.get_transform())
+        c2w_mat = get_sensor2world_matrix(prj_depth_camera.get_transform())
         patch_p3d = (c2w_mat @ patch_p3d)[:3]
 
         return patch_p3d, patch_color
@@ -176,7 +176,7 @@ def main():
 
             camera_transform = rgb_camera.get_transform()
 
-            world2camera_matrix = get_world2camera_matrix(camera_transform)
+            world2camera_matrix = get_world2sensor_matrix(camera_transform)
 
             p2d = k @ (world2camera_matrix @ np.concatenate([object_p3d, np.ones((1, object_p3d.shape[1]))]))[:3]
             p2d[0] /= p2d[2]

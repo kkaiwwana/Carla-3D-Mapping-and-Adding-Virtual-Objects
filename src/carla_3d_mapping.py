@@ -18,7 +18,7 @@ import cv2
 import open3d as o3d
 import time
 
-from utils import depth_to_local_point_cloud, get_camera2world_matrix, set_sync_mode, get_sensor
+from utils import depth_to_local_point_cloud, get_sensor2world_matrix, set_sync_mode, get_sensor
 
 # arguments
 import argparse
@@ -111,7 +111,7 @@ def main(*args, **kwargs):
                 camera_transform = depth_camera.get_transform()
                 # get translation and rotation matrix
                 # WATCH OUT! Use carla.Transform().get_matrix() will cause mistakes.
-                camera2world_matrix = get_camera2world_matrix(camera_transform)
+                camera2world_matrix = get_sensor2world_matrix(camera_transform)
 
                 # convert p2d to p3d(local) and convert color RGB <-> BGR
                 p3d, color = depth_to_local_point_cloud(depth_image, rgb_image[..., [2, 1, 0]], max_depth=0.6)
